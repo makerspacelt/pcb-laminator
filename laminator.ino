@@ -1,8 +1,8 @@
 const int RELAYS_COUNT = 4;
-const int SUPER_MAX_TEMPERATURE = 100;
+const int SUPER_MAX_TEMPERATURE = 90;
 const int SUPER_MIN_TEMPERATURE = 5;
-const int WORK_MAX_TEMPERATURE = 150;
-const int WORK_MIN_TEMPERATURE = 148;
+const int WORK_MAX_TEMPERATURE = 72;
+const int WORK_MIN_TEMPERATURE = 70;
 const int NTC_MAP_TEMPERATURE_DELTA = 5;
 const int STATUS_NOT_MAPPED = 0;
 const int STATUS_MAP_RELAYS = 5;
@@ -13,7 +13,7 @@ int ntc[RELAYS_COUNT] = {A0, A1, A2, A3};
 int ntc_map[RELAYS_COUNT]; // {A3, A2, A0, A1}
 int ntc_temperature_cache[RELAYS_COUNT];
 int laminator_status;
-
+int print_delay = 0;
 
 void switchOffRelay(int relay) {
   digitalWrite(relays[relay], HIGH);
@@ -119,6 +119,21 @@ void validateTemperature() {
   }
 }
 
+void printTemperatures(){  
+  if (print_delay == 2048) {
+    for (int i = 0; i < RELAYS_COUNT; i++) {
+      Serial.print(" Relay ");
+      Serial.print(i + 1);
+      Serial.print(": ");
+      Serial.print(getRelayTemperature(i));
+      Serial.print("C; ");
+    }
+    Serial.println(" ");
+    print_delay = 0;
+  }
+  print_delay++;
+}
+
 void work(){
   if (laminator_status == STATUS_WORK) {
     for (int i = 0; i < RELAYS_COUNT; i++) {
@@ -136,6 +151,7 @@ void loop() {
   initMap();
   validateTemperature();
   work();
+  printTemperatures();
   
 /*  delay(1000);             
   int sensorValue0 = analogRead(A0);
