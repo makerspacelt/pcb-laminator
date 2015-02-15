@@ -1,12 +1,13 @@
 const int RELAYS_COUNT = 4;
-const int SUPER_MAX_TEMPERATURE = 90;
-const int SUPER_MIN_TEMPERATURE = 5;
+const int SUPER_MAX_TEMPERATURE = 10000;
+const int SUPER_MIN_TEMPERATURE = -10000;
 const int WORK_MAX_TEMPERATURE = 72;
 const int WORK_MIN_TEMPERATURE = 70;
 const int NTC_MAP_TEMPERATURE_DELTA = 5;
 const int STATUS_NOT_MAPPED = 0;
 const int STATUS_MAP_RELAYS = 5;
 const int STATUS_WORK = 10;
+const int STATUS_DEBUG = 9999;
 
 int relays[RELAYS_COUNT] = {2, 3, 4, 5};
 int ntc[RELAYS_COUNT] = {A0, A1, A2, A3};
@@ -14,6 +15,7 @@ int ntc_map[RELAYS_COUNT]; // {A3, A2, A0, A1}
 int ntc_temperature_cache[RELAYS_COUNT];
 int laminator_status;
 int print_delay = 0;
+int print_interval = 2048;
 
 void switchOffRelay(int relay) {
   digitalWrite(relays[relay], HIGH);
@@ -31,8 +33,9 @@ void switchOffAllRelays() {
 
 int getNtcTemperature (int ntc) {
   int bits = analogRead(ntc);
-  int temperature = (1000 - bits) / 10;
+  int temperature = -0.16 * bits + 205;
   return temperature;
+//  return bits;
 }
 
 void cacheNtcTemperature () {
@@ -47,7 +50,7 @@ int getRelayTemperature (int relay) {
 
 void setup() {                
   for (int i = 0; i < RELAYS_COUNT; i++) {
-    pinMode(ntc[i], INPUT_PULLUP);
+//    pinMode(ntc[i], INPUT_PULLUP);
     pinMode(relays[i], OUTPUT);
     switchOffRelay(i);
   }
@@ -99,6 +102,9 @@ void initMap() {
 void validateTemperature() {
   boolean sheat = false;
   int temperature;
+  if (laminator_status == STATUS_DEBUG) {
+    return;
+  }
   for (int i = 0; i < RELAYS_COUNT; i++) {
     temperature = getNtcTemperature(ntc[i]);
     if (temperature > SUPER_MAX_TEMPERATURE || temperature < SUPER_MIN_TEMPERATURE) {
@@ -120,12 +126,19 @@ void validateTemperature() {
 }
 
 void printTemperatures(){  
-  if (print_delay == 2048) {
+  if (print_delay == print_interval) {
+    int temp;
     for (int i = 0; i < RELAYS_COUNT; i++) {
-      Serial.print(" Relay ");
+      if (laminator_status == STATUS_DEBUG) {
+        Serial.print(" NTC ");
+        temp = getNtcTemperature(i);
+      } else {
+        Serial.print(" Relay ");
+        temp = getRelayTemperature(i);
+      }
       Serial.print(i + 1);
       Serial.print(": ");
-      Serial.print(getRelayTemperature(i));
+      Serial.print(temp);
       Serial.print("C; ");
     }
     Serial.println(" ");
@@ -147,11 +160,47 @@ void work(){
   }
 }
 
+void debug() {
+  int incoming = Serial.read();
+  if (incoming == 'N') {
+    Serial.println("Debug mode ON;");
+    switchOffAllRelays();
+    laminator_status = STATUS_DEBUG;
+    print_interval = 16384;
+    print_delay = 0;
+  }
+  if (incoming == 'F') {
+    Serial.println("Debug mode OFF;");
+    switchOffAllRelays();
+    for (int i = 0; i < RELAYS_COUNT; i++) {
+        ntc_map[i] = NULL;
+    }
+    laminator_status = STATUS_NOT_MAPPED;
+    print_interval = 2048;
+    print_delay = 0;
+  }
+  if (laminator_status == STATUS_DEBUG) {
+    if (incoming == '1') {
+      digitalWrite(relays[0], !digitalRead(relays[0]));
+    }
+    if (incoming == '2') {
+      digitalWrite(relays[1], !digitalRead(relays[1]));
+    }
+    if (incoming == '3') {
+      digitalWrite(relays[2], !digitalRead(relays[2]));
+    }
+    if (incoming == '4') {
+      digitalWrite(relays[3], !digitalRead(relays[3]));
+    }
+  }
+}
+
 void loop() {
   initMap();
   validateTemperature();
   work();
   printTemperatures();
+  debug();
   
 /*  delay(1000);             
   int sensorValue0 = analogRead(A0);
